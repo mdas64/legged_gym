@@ -29,8 +29,8 @@ class AlienGoCfg( LeggedRobotCfg ):
     class init_state( LeggedRobotCfg.init_state ):
         pos = [0.0, 0.0, 0.50] # x,y,z [m]
         default_joint_angles = {
-             'FL_hip_joint': 0.0,   # [rad]v
-             'RL_hip_joint': 0.0,   # [rad]v
+             'FL_hip_joint': 0.0,   # [rad]
+             'RL_hip_joint': 0.0,   # [rad]
              'FR_hip_joint': -0.0 ,  # [rad]
              'RR_hip_joint': -0.0,   # [rad]
 
