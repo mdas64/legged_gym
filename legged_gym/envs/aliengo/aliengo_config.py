@@ -3,8 +3,8 @@ from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobot
 class AlienGoCfg( LeggedRobotCfg ):
     class env( LeggedRobotCfg.env ):
         #num_observations = 48
-        num_observations = 45
-        episode_length_s = 20 
+        num_observations = 47
+        episode_length_s = 35 
   
     class terrain( LeggedRobotCfg.terrain ):
         mesh_type = 'plane'
@@ -24,6 +24,8 @@ class AlienGoCfg( LeggedRobotCfg ):
         #heading_command = False
         resampling_time = 4.
         class ranges( LeggedRobotCfg.commands.ranges ):
+            #lin_vel_x = [-0.0, 5.0] # min max [m/s]
+            #lin_vel_y = [-0.0, 5.0]   # min max [m/s]
             ang_vel_yaw = [-1.5, 1.5]
 
     class init_state( LeggedRobotCfg.init_state ):
@@ -34,9 +36,9 @@ class AlienGoCfg( LeggedRobotCfg ):
              'FR_hip_joint': -0.0 ,  # [rad]
              'RR_hip_joint': -0.0,   # [rad]
 
-             'FL_thigh_joint': .8,     # [rad]
+             'FL_thigh_joint': 1.2,     # [rad]
              'RL_thigh_joint': 1.2,   # [rad]
-             'FR_thigh_joint': 0.8,     # [rad]
+             'FR_thigh_joint': 1.2,     # [rad]
              'RR_thigh_joint': 1.2,   # [rad]
 
              'FL_calf_joint': -1.25,   # [rad]
@@ -63,8 +65,9 @@ class AlienGoCfg( LeggedRobotCfg ):
         only_positive_rewards = True
         class scales( LeggedRobotCfg.rewards.scales ):
             box_topple = 0.
-            dist_from_box = 2.
+            dist_from_box = 0.
 
+            '''
             termination = -0.0
             tracking_lin_vel = 0.0
             tracking_ang_vel = 0.0
@@ -80,6 +83,7 @@ class AlienGoCfg( LeggedRobotCfg ):
             feet_stumble = -0.0 
             action_rate = -0.01
             stand_still = -0.0
+            '''
 
     class noise( LeggedRobotCfg.noise ):
         add_noise = False
@@ -92,7 +96,7 @@ class AlienGoRoughCfgPPO( LeggedRobotCfgPPO ):
     class runner( LeggedRobotCfgPPO.runner ):
         run_name = ''
         experiment_name = 'aliengo'
-        max_iterations = 3000 # number of policy updates
+        max_iterations = 1000 # number of policy updates
         
     class algorithm( LeggedRobotCfgPPO.algorithm):
         entropy_coef = 0.01

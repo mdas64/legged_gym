@@ -113,6 +113,7 @@ class LeggedRobot(BaseTask):
             calls self._post_physics_step_callback() for common computations 
             calls self._draw_debug_vis() if needed
         """
+
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
 
@@ -129,10 +130,11 @@ class LeggedRobot(BaseTask):
 
         # compute observations, rewards, resets, ...
         self.check_termination()
-        self.compute_reward()
+        #self.compute_reward()
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
         self.compute_observations() # in some cases a simulation step might be required to refresh some obs (for example body positions)
+        self.compute_reward()
 
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
@@ -147,7 +149,7 @@ class LeggedRobot(BaseTask):
         self.reset_buf = torch.any(torch.norm(self.contact_forces[:, self.termination_contact_indices, :], dim=-1) > 1., dim=1)
         self.time_out_buf = self.episode_length_buf > self.max_episode_length # no terminal reward for time-outs
         self.reset_buf |= self.time_out_buf
-        self.reset_buf |= (self.root_states[:, 2] < 0.35)
+        self.reset_buf |= (self.root_states[:, 2] < 0.30)
 
     def reset_idx(self, env_ids):
         """ Reset some environments.
@@ -220,6 +222,10 @@ class LeggedRobot(BaseTask):
         """
         # calculate relative position of block in robot's coordinate frame
         # divide position by 5 (to scale the value)
+
+        q,t = tf_inverse(self.root_states[:,3:7], self.root_states[:,:3])
+        self.robot_relative_box_pos = tf_apply(q,t,self.box_states[:,:3])
+
         self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
                                     self.base_ang_vel  * self.obs_scales.ang_vel,
                                     self.projected_gravity,
@@ -228,6 +234,7 @@ class LeggedRobot(BaseTask):
                                     self.dof_vel * self.obs_scales.dof_vel,
                                     self.actions,
                                     # add relative position of block 
+                                    self.robot_relative_box_pos[:,:2]
                                     ),dim=-1)
         # add perceptive inputs if not blind
         if self.cfg.terrain.measure_heights:
@@ -263,11 +270,6 @@ class LeggedRobot(BaseTask):
         self.gym.viewer_camera_look_at(self.viewer, None, cam_pos, cam_target)
 
     #------------- Callbacks --------------
-    # 5/15/24
-    def get_relative_translation(self, transform1, transform2):
-        q,t = tf_inverse(transform1[0], transform2[1])
-        return tf_apply(q,t,transform2[1])
-
 
     def _process_rigid_shape_props(self, props, env_id):
         """ Callback allowing to store/change/randomize the rigid shape properties of each environment.
@@ -426,14 +428,14 @@ class LeggedRobot(BaseTask):
         else:
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
-        # base velocitiess
+        # base velocities
         self.root_states[env_ids, 7:13] = torch_rand_float(-0.5, 0.5, (len(env_ids), 6), device=self.device) # [7:10]: lin vel, [10:13]: ang vel
         env_ids_int32_robot = env_ids.to(dtype=torch.int32) * 2
         env_ids_int32_box = env_ids.to(dtype=torch.int32) * 2 + 1
         actor_ids = torch.flatten(torch.linspace(0, self.num_actors*self.num_envs-1,self.num_envs*self.num_actors,device=self.device).reshape(self.num_envs,self.num_actors)[env_ids])
         actor_ids_int32 = actor_ids.to(dtype=torch.int32)
 
-        self.box_states[env_ids] = torch.tensor([0.8,0.4,0.6]+[0.]*3+[1.]+[0.]*6, device=self.root_states.device)
+        self.box_states[env_ids] = torch.tensor([0.6,0.2,0.7]+[0.]*3+[1.]+[0.]*6, device=self.root_states.device)
         self.box_states[env_ids,:2] += self.env_origins[env_ids,:2]
 
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
@@ -731,7 +733,8 @@ class LeggedRobot(BaseTask):
                 
             rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
             self.gym.set_asset_rigid_shape_properties(robot_asset, rigid_shape_props)
-            actor_handle = self.gym.create_actor(env_handle, robot_asset, start_pose, self.cfg.asset.name, i*2, self.cfg.asset.self_collisions, 0)
+            #actor_handle = self.gym.create_actor(env_handle, robot_asset, start_pose, self.cfg.asset.name, i*2, self.cfg.asset.self_collisions, 0)
+            actor_handle = self.gym.create_actor(env_handle, robot_asset, start_pose, self.cfg.asset.name, i, self.cfg.asset.self_collisions, 0)
             dof_props = self._process_dof_props(dof_props_asset, i)
             self.gym.set_actor_dof_properties(env_handle, actor_handle, dof_props)
             body_props = self.gym.get_actor_rigid_body_properties(env_handle, actor_handle)
@@ -740,7 +743,8 @@ class LeggedRobot(BaseTask):
             self.envs.append(env_handle)
             self.actor_handles.append(actor_handle)
             
-            box_handle = self.gym.create_actor(env_handle, box_asset, box_pose, "box", i*2+1, 0)
+            #box_handle = self.gym.create_actor(env_handle, box_asset, box_pose, "box", i*2+1, 0)
+            box_handle = self.gym.create_actor(env_handle, box_asset, box_pose, "box", i, 0)
             self.box_handles.append(box_handle)
             
 
@@ -990,8 +994,12 @@ class LeggedRobot(BaseTask):
         dist = (box_x_coordinates - robot_x_coordinates)**2 + (box_y_coordinates - robot_y_coordinates)**2
         '''
 
-        pos_box_wrt_robot = self.box_states[:,:2]-self.root_states[:,:2]
-        dist = torch.norm(pos_box_wrt_robot)
+        #pos_box_wrt_robot = self.box_states[:,:2]-self.root_states[:,:2]
+        #dist = torch.norm(pos_box_wrt_robot, dim=1)
+
+        dist = torch.clip(torch.norm(self.robot_relative_box_pos[:, :2], dim=1), 0)
 
         return torch.exp(-1.0 * dist)
+
+        
 
