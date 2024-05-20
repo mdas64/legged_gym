@@ -2,8 +2,9 @@ from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobot
 
 class AlienGoCfg( LeggedRobotCfg ):
     class env( LeggedRobotCfg.env ):
-        num_observations = 48
+        #num_observations = 48
         #num_observations = 45
+        num_observations = 47
   
     class terrain( LeggedRobotCfg.terrain ):
         mesh_type = 'plane'
@@ -58,11 +59,12 @@ class AlienGoCfg( LeggedRobotCfg ):
     class rewards( LeggedRobotCfg.rewards ):
         base_height_target = 1.
         max_contact_force = 300.
-        only_positive_rewards = False
+        only_positive_rewards = True
         class scales( LeggedRobotCfg.rewards.scales ):
-            termination = -2.5
-            #stand_still = -2.5
+            termination = -2.0
+            stand_still = -2.0
             box_topple = 2.
+            dist_from_box = .5
 
     class noise( LeggedRobotCfg.noise ):
         add_noise = False
@@ -75,7 +77,7 @@ class AlienGoRoughCfgPPO( LeggedRobotCfgPPO ):
     class runner( LeggedRobotCfgPPO.runner ):
         run_name = ''
         experiment_name = 'aliengo'
-        max_iterations = 2500 # number of policy updates
+        max_iterations = 800 # number of policy updates
         
     class algorithm( LeggedRobotCfgPPO.algorithm):
         entropy_coef = 0.01

@@ -72,6 +72,7 @@ class LeggedRobot(BaseTask):
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
         self.num_actors = 2
+        self.robot_relative_box_pos = None
 
         if not self.headless:
             self.set_camera(self.cfg.viewer.pos, self.cfg.viewer.lookat)
@@ -113,6 +114,11 @@ class LeggedRobot(BaseTask):
             calls self._post_physics_step_callback() for common computations 
             calls self._draw_debug_vis() if needed
         """
+        # calculate relative position of block in robot's coordinate frame
+        # divide position by 5 (to scale the value)
+        q,t = tf_inverse(self.root_states[:,3:7], self.root_states[:,:3])
+        self.robot_relative_box_pos = tf_apply(q,t,self.box_states[:,:3])
+
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
 
@@ -133,6 +139,7 @@ class LeggedRobot(BaseTask):
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
         self.compute_observations() # in some cases a simulation step might be required to refresh some obs (for example body positions)
+        
 
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
@@ -158,6 +165,10 @@ class LeggedRobot(BaseTask):
         Args:
             env_ids (list[int]): List of environment ids which must be reset
         """
+
+        
+
+
         if len(env_ids) == 0:
             return
         # update curriculum
@@ -217,13 +228,18 @@ class LeggedRobot(BaseTask):
     def compute_observations(self):
         """ Computes observations
         """
+        
+
         self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
                                     self.base_ang_vel  * self.obs_scales.ang_vel,
                                     self.projected_gravity,
-                                    self.commands[:, :3] * self.commands_scale,
+                                    #self.commands[:, :3] * self.commands_scale,
+                                    self.robot_relative_box_pos[:,:2],
                                     (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos,
                                     self.dof_vel * self.obs_scales.dof_vel,
-                                    self.actions
+                                    self.actions,
+                                    # add relative position of block 
+                                    #self.robot_relative_box_pos[:,:2]
                                     ),dim=-1)
         # add perceptive inputs if not blind
         if self.cfg.terrain.measure_heights:
@@ -952,3 +968,31 @@ class LeggedRobot(BaseTask):
 
     def _reward_box_topple(self):
         return (self.box_states[:,2] < 0.3).float() #returns all the heights
+    
+    def _reward_dist_from_box(self):
+        # Assuming self.box_states and self.root_states are PyTorch tensors
+        '''
+        box_x_coordinates = self.box_states[:, 0]  
+        box_y_coordinates = self.box_states[:, 1]  
+        box_z_coordinates = self.box_states[:, 2]  
+
+        robot_x_coordinates = self.root_states[:, 0]
+        robot_y_coordinates = self.root_states[:, 1]
+        robot_z_coordinates = self.root_states[:, 2]
+
+        
+        print("box_x: ")
+        print(box_x_coordinates)
+        print("box_y: ")
+        print(box_y_coordinates)
+        
+
+        dist = (box_x_coordinates - robot_x_coordinates)**2 + (box_y_coordinates - robot_y_coordinates)**2
+        '''
+
+        #pos_box_wrt_robot = self.box_states[:,:2]-self.root_states[:,:2]
+        #dist = torch.norm(pos_box_wrt_robot, dim=1)
+
+        dist = torch.clip(torch.norm(self.robot_relative_box_pos[:,:2], dim=1), 0)
+
+        return torch.exp(-1.0 * dist)
