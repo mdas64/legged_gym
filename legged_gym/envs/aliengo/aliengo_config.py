@@ -15,7 +15,7 @@ class AlienGoCfg( LeggedRobotCfg ):
         file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/aliengo_description/urdf/aliengo.urdf'
         foot_name = "foot"
         penalize_contacts_on = ["trunk"]
-        terminate_after_contacts_on = ["trunk", "base", "hip", "thigh"]
+        #terminate_after_contacts_on = ["trunk", "base", "hip", "thigh"]
         self_collisions = 1 # 1 to disable, 0 to enable...bitwise filter
         # fix_base_link = True
 
@@ -63,8 +63,10 @@ class AlienGoCfg( LeggedRobotCfg ):
         class scales( LeggedRobotCfg.rewards.scales ):
             termination = -2.0
             stand_still = -2.0
-            box_topple = 2.
-            dist_from_box = .5
+            box_topple = 0.
+            dist_from_box = 2.0
+            tracking_lin_vel = 3.0
+
 
     class noise( LeggedRobotCfg.noise ):
         add_noise = False

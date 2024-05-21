@@ -118,6 +118,7 @@ class LeggedRobot(BaseTask):
         # divide position by 5 (to scale the value)
         q,t = tf_inverse(self.root_states[:,3:7], self.root_states[:,:3])
         self.robot_relative_box_pos = tf_apply(q,t,self.box_states[:,:3])
+        self.commands = self.robot_relative_box_pos
 
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
@@ -154,6 +155,7 @@ class LeggedRobot(BaseTask):
         self.reset_buf = torch.any(torch.norm(self.contact_forces[:, self.termination_contact_indices, :], dim=-1) > 1., dim=1)
         self.time_out_buf = self.episode_length_buf > self.max_episode_length # no terminal reward for time-outs
         self.reset_buf |= self.time_out_buf
+        self.reset_buf |= (self.root_states[:, 2] < 0.38)
 
     def reset_idx(self, env_ids):
         """ Reset some environments.
@@ -182,7 +184,7 @@ class LeggedRobot(BaseTask):
         self._reset_dofs(env_ids)
         self._reset_root_states(env_ids)
 
-        self._resample_commands(env_ids)
+        #self._resample_commands(env_ids)
 
         # reset buffers
         self.last_actions[env_ids] = 0.
@@ -241,6 +243,8 @@ class LeggedRobot(BaseTask):
                                     # add relative position of block 
                                     #self.robot_relative_box_pos[:,:2]
                                     ),dim=-1)
+        
+        print(self.robot_relative_box_pos[:,:2][23])
         # add perceptive inputs if not blind
         if self.cfg.terrain.measure_heights:
             heights = torch.clip(self.root_states[:, 2].unsqueeze(1) - 0.5 - self.measured_heights, -1, 1.) * self.obs_scales.height_measurements
@@ -348,7 +352,7 @@ class LeggedRobot(BaseTask):
         """
         # 
         env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt)==0).nonzero(as_tuple=False).flatten()
-        self._resample_commands(env_ids)
+        #self._resample_commands(env_ids)
         if self.cfg.commands.heading_command:
             forward = quat_apply(self.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
@@ -360,7 +364,7 @@ class LeggedRobot(BaseTask):
             self._push_robots()
 
     def _resample_commands(self, env_ids):
-        """ Randommly select commands of some environments
+        """ Randomly select commands of some environments
 
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
